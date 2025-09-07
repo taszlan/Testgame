@@ -1,0 +1,9 @@
+  UP = 270
+  DOWN = 90
+  LEFT = 180
+  RIGHT = 0
+  EMPTY = 0
+  WALL = 1
+  PLAYER = 2
+  
+  NO_TRIANGLES = 80

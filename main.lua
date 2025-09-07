@@ -1,13 +1,18 @@
 io.stdout:setvbuf('no')
+require('playerClass')
+require('constants')
+require('worldClass')
+require('triangleClass')
+
+local world = worldObject.new()
 
 function love.load()
+  score = 0
+
   math.randomseed(os.time())
 
   love.window.setMode(640, 660)
-
---Liczba trójkątów:
-  NO_TRIANGLES = 80
-
+  
   -- shader additions
   startTime = love.timer.getTime()
   crtShader = love.graphics.newShader("crt.glsl")
@@ -15,128 +20,12 @@ function love.load()
 
   -- load move sound
   moveSound = love.audio.newSource("sounds/moveit.mp3", "static")
-
-  --Czemu LUA nie ma enum?
-  UP = 270
-  DOWN = 90
-  LEFT = 180
-  RIGHT = 0
-  EMPTY = 0
-  WALL = 1
-  PLAYER = 2
-  
-  score = 0
-
-  movement = {}
-  movement[UP] = function()
-    player.y = player.y - 1
-    worldmap[player.x][player.y+1] = EMPTY
-    worldmap[player.x][player.y] = PLAYER 
-  end
-  movement[DOWN] = function()
-    player.y = player.y + 1
-    worldmap[player.x][player.y-1] = EMPTY
-    worldmap[player.x][player.y] = PLAYER
-  end
-  movement[LEFT] = function()
-    player.x = player.x - 1
-    worldmap[player.x+1][player.y] = EMPTY
-    worldmap[player.x][player.y] = PLAYER  
-  end
-  movement[RIGHT] = function()
-    player.x = player.x + 1
-    worldmap[player.x-1][player.y] = EMPTY
-    worldmap[player.x][player.y] = PLAYER  
-  end
-
-  worldmap = {}
-  for i = 0, 19 do 
-    worldmap[i] = {}
-    for j = 0, 19 do
-      if(i == 0 or j == 0 or i == 19 or j == 19) then
-        worldmap[i][j] = WALL
-      else worldmap[i][j] = EMPTY
-      end
-    end
-  end
-
-  player = {
-    x = 10,
-    y = 10,
-    act_x = 320,
-    act_y = 320,
-    speed = 10
-  }
-
-  triangle = {
-    x,
-    y,
-    id,
-    direction,
-    speed = 10,
-    act_x,
-    act_y,
-    act_angle
-  }
-
-  triangle.__index = triangle
-
-  function triangle.new(x, y, id, direction)
-    local self = setmetatable({}, triangle)
-    self.x = x
-    self.y = y
-    self.id = id
-    self.direction = direction
-    self.act_x = x*32
-    self.act_y = y*32
-    self.act_angle = direction
-    return self
-  end
-
-  tableOfTriangles = {}
-  worldmap[player.x][player.y] = PLAYER
-  initTriangles()
 end
 
-function initTriangles()
-  for i = 1, NO_TRIANGLES do
-    randX = math.random(1,18)
-    randY = math.random(1,18)
-    while worldmap[randX][randY] ~= EMPTY or
-          (randX == 9 and (randY == 9 or randY == 10 or randY == 11)) or
-          (randX == 10 and (randY == 9 or randY == 10 or randY == 11)) or
-          (randX == 11 and (randY == 9 or randY == 10 or randY == 11)) 
-    do
-      randX = math.random(1,18)
-      randY = math.random(1,18)
-    end
-    table.insert(tableOfTriangles, triangle.new(randX, randY, i + 2, randomDirection()) )
-    worldmap[randX][randY] = i + 2
-  end
-end  
-
-function randomDirection()
-  dir = math.random(1,4)
-  if dir == 1 then
-    return RIGHT
-  elseif dir == 2 then
-    return LEFT
-  elseif dir == 3 then
-    return UP
-  elseif dir == 4 then
-    return DOWN
-  end  
-end
 
 function love.update(dt)
-  player.act_x = player.act_x - ((player.act_x - (player.x * 32)) * player.speed * dt)
-  player.act_y = player.act_y - ((player.act_y - (player.y * 32)) * player.speed * dt)
-  
-  for k, v in pairs(tableOfTriangles) do
-    v.act_x = v.act_x - ((v.act_x - (v.x * 32)) * v.speed * dt)
-    v.act_y = v.act_y - ((v.act_y - (v.y * 32)) * v.speed * dt)
-    v.act_angle = v.act_angle - (v.act_angle - v.direction) * dt * v.speed
-  end
+  world:updatePlayerActualPosition(dt)
+  world:updateTrianglesActualPosition(dt)
 end
 
 function love.draw()
@@ -144,26 +33,26 @@ function love.draw()
   love.graphics.clear(0, 0, 0, 1)
 
   love.graphics.setColor(0.878, 0.773, 0.157, 1)
-  love.graphics.rectangle("fill", player.act_x, player.act_y, 32, 32)
+  love.graphics.rectangle("fill", world.player.act_x, world.player.act_y, 32, 32)
   love.graphics.setColor(1, 1, 1, 1)
-  
+
   love.graphics.print("SCORE: "..tostring(score), 20, 640)
-  
-  for i = 1, #tableOfTriangles do
-    tmp = tableOfTriangles[i]
+
+  for i = 1, #world.tableOfTriangles do
+    tmp = world.tableOfTriangles[i]
     love.graphics.polygon("fill",
-                          (tmp.act_x+16) + 16 * math.cos(math.rad(tmp.act_angle)),
-                          (tmp.act_y+16) + 16 * math.sin(math.rad(tmp.act_angle)),
-                          (tmp.act_x+16) + 16 * math.cos(math.rad(tmp.act_angle+120)),
-                          (tmp.act_y+16) + 16 * math.sin(math.rad(tmp.act_angle+120)),
-                          (tmp.act_x+16) + 16 * math.cos(math.rad(tmp.act_angle+240)),
-                          (tmp.act_y+16) + 16 * math.sin(math.rad(tmp.act_angle+240))
-                          )
+      (tmp.act_x+16) + 16 * math.cos(math.rad(tmp.act_angle)),
+      (tmp.act_y+16) + 16 * math.sin(math.rad(tmp.act_angle)),
+      (tmp.act_x+16) + 16 * math.cos(math.rad(tmp.act_angle+120)),
+      (tmp.act_y+16) + 16 * math.sin(math.rad(tmp.act_angle+120)),
+      (tmp.act_x+16) + 16 * math.cos(math.rad(tmp.act_angle+240)),
+      (tmp.act_y+16) + 16 * math.sin(math.rad(tmp.act_angle+240))
+    )
   end
 
-  for x=0, #worldmap do
-    for y=0, #worldmap[x] do
-      if worldmap[x][y] == 1 then
+  for x=0, #world.map do
+    for y=0, #world.map[x] do
+      if world.map[x][y] == 1 then
         love.graphics.rectangle("line", x * 32, y * 32, 32, 32)
       end
     end
@@ -177,39 +66,6 @@ function love.draw()
   love.graphics.setShader()
 end
 
-function moveTriangles()
-  for k, v in pairs(tableOfTriangles) do
-    if v.direction == UP then
-      if worldmap[v.x][v.y-1] == EMPTY then
-        worldmap[v.x][v.y] = EMPTY
-        v.y = v.y -1
-        worldmap[v.x][v.y] = v.id
-      end
-      v.direction = randomDirection()
-    elseif v.direction == DOWN then
-      if worldmap[v.x][v.y+1] == EMPTY then
-        worldmap[v.x][v.y] = EMPTY
-        v.y = v.y + 1
-        worldmap[v.x][v.y] = v.id
-      end
-      v.direction = randomDirection()
-    elseif v.direction == LEFT then
-      if worldmap[v.x-1][v.y] == EMPTY then
-        worldmap[v.x][v.y] = EMPTY
-        v.x = v.x - 1
-        worldmap[v.x][v.y] = v.id
-      end
-      v.direction = randomDirection()
-    elseif v.direction == RIGHT then
-      if worldmap[v.x+1][v.y] == EMPTY then
-        worldmap[v.x][v.y] = EMPTY
-        v.x = v.x + 1
-        worldmap[v.x][v.y] = v.id
-      end
-      v.direction = randomDirection()
-    end
-  end
-end
 
 -- helper to play overlapping sound
 function playMoveSound()
@@ -219,27 +75,31 @@ end
 
 function love.keypressed(key)  
   if key == "down" then
-    if (worldmap[player.x][player.y+1] ~= WALL) then
-      movement[DOWN]()
-      moveTriangles()
+    if (world.map[world.player.x][world.player.y+1] ~= WALL) then
+      world.mapMoveDown(world.player.x, world.player.y, PLAYER)
+      world.player:moveDown()
+      world:moveTriangles()
       playMoveSound()
     end
   elseif key == "up" then
-    if (worldmap[player.x][player.y-1] ~= WALL) then
-      movement[UP]()
-      moveTriangles()
+    if (world.map[world.player.x][world.player.y-1] ~= WALL) then
+      world.mapMoveUp(world.player.x, world.player.y, PLAYER)
+      world.player:moveUp()
+      world:moveTriangles()
       playMoveSound()
     end
   elseif key == "left" then
-    if (worldmap[player.x-1][player.y] ~= WALL) then
-      movement[LEFT]()
-      moveTriangles()
+    if (world.map[world.player.x-1][world.player.y] ~= WALL) then
+      world.mapMoveLeft(world.player.x, world.player.y, PLAYER)
+      world.player:moveLeft()
+      world:moveTriangles()
       playMoveSound()
     end
   elseif key == "right" then
-    if (worldmap[player.x+1][player.y] ~= WALL) then
-      movement[RIGHT]()      
-      moveTriangles()
+    if (world.map[world.player.x+1][world.player.y] ~= WALL) then
+      world.mapMoveRight(world.player.x, world.player.y, PLAYER)
+      world.player:moveRight()     
+      world:moveTriangles()
       playMoveSound()
     end
   end
